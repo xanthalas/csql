@@ -5,6 +5,7 @@ using System.Text;
 using System.IO;
 using System.Data;
 using System.Data.SqlClient;
+using CommandLine.Text;
 
 namespace csql
 {
@@ -12,6 +13,10 @@ namespace csql
     {
         private const string INIFILE = "csql.ini";
         private static string connectionString = string.Empty;
+        private static Options options = new Options();
+        private static int databaseIndex = -1;
+        private static List<string> databases = new List<string>();
+        private static List<string> comments = new List<string>();
 
         public static string ConnectionString
         {
@@ -22,34 +27,38 @@ namespace csql
         }
         static void Main(string[] args)
         {
-
-            string path = @"c:\tools";
-            using (StreamReader reader = new StreamReader(path + @"\" + INIFILE))
+            if (!CommandLine.Parser.Default.ParseArguments(args, options))
             {
-                connectionString = reader.ReadLine();
-
-                if (ConnectionString == String.Empty)
-                {
-                    Console.WriteLine("No connection string found");
-                    return;
-                }
+                Environment.Exit(CommandLine.Parser.DefaultExitCodeFail);
             }
 
-            if (args.Length == 0)
+            extractSqlCommand(args);
+
+            if (options.Help)
             {
-                Console.WriteLine("No sql command given");
+                showHelp();
                 return;
             }
 
-            string sql = string.Empty;
-
-            if (args.Length == 2 && args[0] == "-i")
+            if (!loadIniFile())
             {
-                sql = readSqlFromFile(args[1]);
+                Environment.Exit(1);
             }
-            else
+
+            if (options.ShowList)
             {
-                sql = args[0];
+                Console.WriteLine("csql version 0.2");
+
+                showList();
+                return;
+            }
+
+            string sql = extractSqlCommand(args);
+
+            if (sql.Trim().Length == 0)
+            {
+                Console.WriteLine("No sql command given");
+                return;
             }
 
             processSQL(sql);
@@ -78,7 +87,12 @@ namespace csql
                 return;
             }
 
-            Console.WriteLine("csql v 0.1. Connection string: {0}", ConnectionString);
+            Console.WriteLine("csql v 0.2. Connected to {0}", formatDbString(ConnectionString));
+
+            if (options.Verbose)
+            {
+                Console.WriteLine("csql v 0.2. Connection string: {0}", ConnectionString);
+            }
 
             SqlCommand cmd = new System.Data.SqlClient.SqlCommand(command, connection);
             cmd.CommandType = CommandType.Text;
@@ -100,12 +114,21 @@ namespace csql
             {
                 if (returnDs.Tables.Count > 1)
                 {
-                    Console.WriteLine("Table " + tableCount.ToString());
-                    Console.WriteLine("-------");
+                    Console.WriteLine("\nTable " + tableCount.ToString());
+                    if (!options.Wide)                                      //Only underline it in normal mode
+                    {
+                        Console.WriteLine("-------");
+                    }
                 }
 
-                //outputInLineFormat(table);
-                outputInColumnFormat(table);
+                if (options.Wide)
+                {
+                    outputInLineFormat(table);
+                }
+                else
+                {
+                    outputInColumnFormat(table);
+                }
 
                 Console.WriteLine(" ");
 
@@ -127,23 +150,68 @@ namespace csql
         /// <param name="table"></param>
         private static void outputInLineFormat(DataTable table)
         {
-
+            //First find the maximum width of each column of data
+            List<int> maxColumnWidth = new List<int>(table.Columns.Count);
+            
             foreach (DataColumn col in table.Columns)
             {
-                Console.Write(col.ColumnName + " | ");
+                maxColumnWidth.Add(col.ColumnName.Length);
             }
-            Console.Write("\n");
+
+            int index = 0;
+            foreach (DataRow row in table.Rows)
+            {
+                index = 0;
+                foreach (object column in row.ItemArray)
+                {
+                    var colLength = column.ToString().Length;
+                    if (colLength > maxColumnWidth[index])
+                    {
+                        maxColumnWidth[index] = colLength;
+                    }
+                    index++;
+                }
+            }
+
+            int lineWidth = 0;
+            foreach (var value in maxColumnWidth)
+            {
+                lineWidth += value + 1;
+            }
+
+            //Now write out the actual data
+            string separator = "+" + "".PadLeft(lineWidth - 1, '-') + "+";
+
+            Console.Write(separator + "\n");
+            index = 0;
+            foreach (DataColumn col in table.Columns)
+            {
+                Console.Write(formatColumn(col.ColumnName, maxColumnWidth[index]));
+                index++;
+            }
+
+            Console.Write("|\n");
+            Console.Write(separator);
 
             foreach (DataRow row in table.Rows)
             {
                 Console.Write("\n");
+                index = 0;
                 foreach (object column in row.ItemArray)
                 {
-                    Console.Write(column.ToString() + " | ");
+                    Console.Write(formatColumn(column.ToString(), maxColumnWidth[index]));
+                    index++;
                 }
+                Console.Write("|");
             }
+            Console.Write("\n");
+            Console.Write(separator);
         }
 
+        private static string formatColumn(string text, int width)
+        {
+            return "|" + text.PadRight(width, ' ');
+        }
         /// <summary>
         /// Display the contents of the table in Line oriented mode
         /// </summary>
@@ -177,5 +245,112 @@ namespace csql
             }
         }
 
+        private static bool loadIniFile()
+        {
+            string path = AppDomain.CurrentDomain.BaseDirectory;
+
+            using (StreamReader reader = new StreamReader(path + @"\" + INIFILE))
+            {
+                #region Retrieve the database-to-use number
+                var line = reader.ReadLine();
+
+                if (line.Trim().Length == 0)
+                {
+                    Console.WriteLine("Invalid ini file. First line should be the number of the database connection to use");
+                    return false;
+                }
+
+                try
+                {
+                    databaseIndex = System.Convert.ToInt32(line);
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Invalid ini file. First line should be the number of the database connection to use");
+                    return false;
+                }
+                #endregion
+
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (line.Trim().Length > 0)
+                    {
+                        if (line.Substring(0,1) == "#")
+                        {
+                            comments.Add(line);
+                        }
+                        else
+                        {
+                            databases.Add(line);
+                        }
+                    }
+                }
+            }
+
+            if (options.SelectedDatabase >= 0)
+            {
+                databaseIndex = options.SelectedDatabase;
+            }
+            if (databaseIndex >= databases.Count)
+            {
+                Console.WriteLine("Invalid database selected. Available databases:");
+                showList();
+                return false;
+            }
+            else
+            {
+                connectionString = databases[databaseIndex];
+            }
+            return true;
+
+        }
+
+        private static string extractSqlCommand(string[] args)
+        {
+            StringBuilder sb = new StringBuilder();
+            foreach (var arg in args)
+            {
+                if (arg.Substring(0, 1) != "-")
+                {
+                    sb.Append(arg + " ");
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private static void showHelp()
+        {
+            HelpText ht = new HelpText("csql version 0.2");
+            ht.AddOptions(options);
+            Console.WriteLine(ht.ToString());
+
+        }
+
+        private static void showList()
+        {
+            Console.WriteLine("");
+
+            int counter = 0;
+            foreach(var db in databases)
+            {
+                Console.WriteLine(string.Format("{0}: {1}", counter, formatDbString(db)));
+                counter++;
+            }
+            Console.WriteLine("");
+        }
+
+        private static string formatDbString(string db)
+        {
+            int start = db.IndexOf("Source=") + 7;
+            int end = db.IndexOf(";", start);
+            string server = db.Substring(start, end - start);
+
+            start = db.IndexOf("Catalog=") + 8;
+            end = db.IndexOf(";", start);
+            string database = db.Substring(start, end - start);
+
+            return server + "." + database;
+        }
     }
 }
