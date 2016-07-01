@@ -17,6 +17,7 @@ namespace csql
         private static int databaseIndex = -1;
         private static List<string> databases = new List<string>();
         private static List<string> comments = new List<string>();
+        private static bool updateIniFile = false;
 
         public static string ConnectionString
         {
@@ -62,6 +63,11 @@ namespace csql
             }
 
             processSQL(sql);
+
+            if (updateIniFile)
+            {
+                writeIniFile();
+            }
         }
 
         private static string readSqlFromFile(string filename)
@@ -114,11 +120,13 @@ namespace csql
             {
                 if (returnDs.Tables.Count > 1)
                 {
-                    Console.WriteLine("\nTable " + tableCount.ToString());
-                    if (!options.Wide)                                      //Only underline it in normal mode
-                    {
-                        Console.WriteLine("-------");
-                    }
+                    var rowText = (table.Rows.Count == 1) ? " row" : " rows";
+                    Console.WriteLine("\nTable " + tableCount.ToString() + ": " + table.Rows.Count.ToString() + rowText);
+                }
+                else
+                {
+                    var rowText = (table.Rows.Count == 1) ? " row" : " rows";
+                    Console.WriteLine("\n" + table.Rows.Count.ToString() + rowText);
                 }
 
                 if (options.Wide)
@@ -152,7 +160,7 @@ namespace csql
         {
             //First find the maximum width of each column of data
             List<int> maxColumnWidth = new List<int>(table.Columns.Count);
-            
+
             foreach (DataColumn col in table.Columns)
             {
                 maxColumnWidth.Add(col.ColumnName.Length);
@@ -173,14 +181,17 @@ namespace csql
                 }
             }
 
+            StringBuilder sbSeparator = new StringBuilder();
             int lineWidth = 0;
             foreach (var value in maxColumnWidth)
             {
                 lineWidth += value + 1;
+                sbSeparator.Append("+" + "".PadLeft(value, '-'));
             }
 
             //Now write out the actual data
-            string separator = "+" + "".PadLeft(lineWidth - 1, '-') + "+";
+            sbSeparator.Append("+");
+            string separator = sbSeparator.ToString();
 
             Console.Write(separator + "\n");
             index = 0;
@@ -275,7 +286,7 @@ namespace csql
                 {
                     if (line.Trim().Length > 0)
                     {
-                        if (line.Substring(0,1) == "#")
+                        if (line.Substring(0, 1) == "#")
                         {
                             comments.Add(line);
                         }
@@ -290,6 +301,7 @@ namespace csql
             if (options.SelectedDatabase >= 0)
             {
                 databaseIndex = options.SelectedDatabase;
+                updateIniFile = true;
             }
             if (databaseIndex >= databases.Count)
             {
@@ -332,7 +344,7 @@ namespace csql
             Console.WriteLine("");
 
             int counter = 0;
-            foreach(var db in databases)
+            foreach (var db in databases)
             {
                 Console.WriteLine(string.Format("{0}: {1}", counter, formatDbString(db)));
                 counter++;
@@ -351,6 +363,24 @@ namespace csql
             string database = db.Substring(start, end - start);
 
             return server + "." + database;
+        }
+
+        private static void writeIniFile()
+        {
+            string path = AppDomain.CurrentDomain.BaseDirectory;
+
+            using (StreamWriter writer = new StreamWriter(path + @"\" + INIFILE))
+            {
+                writer.WriteLine(databaseIndex.ToString());
+                foreach (var db in databases)
+                {
+                    writer.WriteLine(db);
+                }
+                foreach (var c in comments)
+                {
+                    writer.WriteLine(c);
+                }
+            }
         }
     }
 }
