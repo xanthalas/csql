@@ -30,6 +30,7 @@ namespace csql
         {
             if (!CommandLine.Parser.Default.ParseArguments(args, options))
             {
+                Console.WriteLine("Invalid arguments passed");
                 Environment.Exit(CommandLine.Parser.DefaultExitCodeFail);
             }
 
@@ -68,6 +69,7 @@ namespace csql
             {
                 writeIniFile();
             }
+
         }
 
         private static string readSqlFromFile(string filename)
@@ -93,7 +95,10 @@ namespace csql
                 return;
             }
 
-            Console.WriteLine("csql v 0.2. Connected to {0}", formatDbString(ConnectionString));
+            if (!options.Csv)
+            {
+                Console.WriteLine("csql v 0.2. Connected to {0}", formatDbString(ConnectionString));
+            }
 
             if (options.Verbose)
             {
@@ -120,13 +125,19 @@ namespace csql
             {
                 if (returnDs.Tables.Count > 1)
                 {
-                    var rowText = (table.Rows.Count == 1) ? " row" : " rows";
-                    Console.WriteLine("\nTable " + tableCount.ToString() + ": " + table.Rows.Count.ToString() + rowText);
+                    if (!options.Csv)
+                    {
+                        var rowText = (table.Rows.Count == 1) ? " row" : " rows";
+                        Console.WriteLine("\nTable " + tableCount.ToString() + ": " + table.Rows.Count.ToString() + rowText);
+                    }
                 }
                 else
                 {
-                    var rowText = (table.Rows.Count == 1) ? " row" : " rows";
-                    Console.WriteLine("\n" + table.Rows.Count.ToString() + rowText);
+                    if (!options.Csv)
+                    {
+                        var rowText = (table.Rows.Count == 1) ? " row" : " rows";
+                        Console.WriteLine("\n" + table.Rows.Count.ToString() + rowText);
+                    }
                 }
 
                 if (options.Column)
@@ -135,7 +146,14 @@ namespace csql
                 }
                 else
                 {
-                    outputInLineFormat(table);
+                    if (options.Csv)
+                    {
+                        outputInCsvFormat(table);
+                    }
+                    else
+                    {
+                        outputInLineFormat(table);
+                    }
                 }
 
                 Console.WriteLine(" ");
@@ -144,11 +162,17 @@ namespace csql
             }
             if (returnDs.Tables.Count == 1)
             {
-                Console.WriteLine("\nFinished. 1 table returned.");
+                if (!options.Csv)
+                {
+                    Console.WriteLine("\nFinished. 1 table returned.");
+                }
             }
             else
             {
-                Console.WriteLine("\nFinished. {0} tables returned.", returnDs.Tables.Count);
+                if (!options.Csv)
+                {
+                    Console.WriteLine("\nFinished. {0} tables returned.", returnDs.Tables.Count);
+                }
             }
         }
 
@@ -256,6 +280,48 @@ namespace csql
             }
         }
 
+        private static void outputInCsvFormat(DataTable table)
+        {
+            int columnCount = 0;
+
+            if (options.CsvHeaders)
+            {
+                foreach (DataColumn col in table.Columns)
+                {
+                    Console.Write(col.ColumnName);
+                    columnCount++;
+                    if (columnCount < table.Columns.Count)
+                    {
+                        Console.Write(",");
+                    }
+                }
+            }
+
+            foreach (DataRow row in table.Rows)
+            {
+                columnCount = 0;
+                Console.Write("\n");
+                foreach (object column in row.ItemArray)
+                {
+                    string columnString = column.ToString();
+                    if (columnString.Contains(","))
+                    {
+                        Console.Write("\"" + columnString + "\"");
+                    }
+                    else
+                    {
+                        Console.Write(columnString);
+                    }
+                    columnCount++;
+                    if (columnCount < table.Columns.Count)
+                    {
+                        Console.Write(",");
+                    }
+                }
+            }
+
+        }
+
         private static bool loadIniFile()
         {
             string path = AppDomain.CurrentDomain.BaseDirectory;
@@ -336,6 +402,14 @@ namespace csql
             HelpText ht = new HelpText("csql version 0.2");
             ht.AddOptions(options);
             Console.WriteLine(ht.ToString());
+            Console.WriteLine("\nUtility for running queries against SQL Server databases.");
+            Console.WriteLine("\nUsage: csql [optional switches] sql-query");
+            Console.WriteLine("For example: csql select * from addresses");
+            Console.WriteLine("or         : csql -c select * from employees");
+
+            Console.WriteLine("\nDatabase connection strings are held in the file csql.ini in the same directory as the executable.");
+            Console.WriteLine("It remembers which database you last used so you don't need to specify it with the -s switch every time.");
+            Console.WriteLine("Complicated queries sometimes don't get passed from the command line properly. In those cases enclose the query in quotes.");
 
         }
 

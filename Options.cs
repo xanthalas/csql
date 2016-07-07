@@ -33,6 +33,13 @@ namespace csql
         [Option('c', "column", DefaultValue = false, HelpText = "Show output in column mode")]
         public bool Column { get; set; }
 
+        [Option("csv", DefaultValue = false, HelpText = "Output in CSV format")]
+        public bool Csv { get; set; }
+
+        [Option("headers", DefaultValue = false, HelpText = "Write column headers - applies to CSV mode only")]
+        public bool CsvHeaders { get; set; }
+
+
         [Option('v', "verbose", DefaultValue = false, HelpText = "Show verbose output")]
         public bool Verbose { get; set; }
 
