@@ -30,8 +30,8 @@ namespace csql
         [Option('l', "list", DefaultValue = false, HelpText = "List available databases")]
         public bool ShowList { get; set; }
 
-        [Option('w', "wide", DefaultValue = false, HelpText = "Show output in line-mode (wide)")]
-        public bool Wide { get; set; }
+        [Option('c', "column", DefaultValue = false, HelpText = "Show output in column mode")]
+        public bool Column { get; set; }
 
         [Option('v', "verbose", DefaultValue = false, HelpText = "Show verbose output")]
         public bool Verbose { get; set; }

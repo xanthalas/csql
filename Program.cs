@@ -129,13 +129,13 @@ namespace csql
                     Console.WriteLine("\n" + table.Rows.Count.ToString() + rowText);
                 }
 
-                if (options.Wide)
+                if (options.Column)
                 {
-                    outputInLineFormat(table);
+                    outputInColumnFormat(table);
                 }
                 else
                 {
-                    outputInColumnFormat(table);
+                    outputInLineFormat(table);
                 }
 
                 Console.WriteLine(" ");
