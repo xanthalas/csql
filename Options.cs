@@ -43,6 +43,9 @@ namespace csql
         [Option('v', "verbose", DefaultValue = false, HelpText = "Show verbose output")]
         public bool Verbose { get; set; }
 
+        [Option('t', "tables", DefaultValue = false, HelpText = "List tables whose name matches the pattern given")]
+        public bool TableList { get; set; }
+
         [Option('s', "select", DefaultValue = -1, HelpText = "Select database")]
         public int SelectedDatabase { get; set; }
 

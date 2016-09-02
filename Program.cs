@@ -57,6 +57,16 @@ namespace csql
 
             string sql = extractSqlCommand(args);
 
+            if (options.TableList)
+            {
+                //When the Tables parameter is passed the command should be a SQL pattern for searching for table names
+                if (!sql.Contains('%'))
+                {
+                    sql = "%" + sql.Trim() + "%";
+                }
+                sql = $"select TABLE_SCHEMA as Owner, TABLE_NAME as Name, TABLE_TYPE as Type from INFORMATION_SCHEMA.TABLES where table_name like '{sql.Trim()}' order by TABLE_TYPE, TABLE_NAME";
+            }
+
             if (sql.Trim().Length == 0)
             {
                 Console.WriteLine("No sql command given");
@@ -92,6 +102,7 @@ namespace csql
             catch (SqlException ex)
             {
                 Console.WriteLine("Error connecting to database using string: " + ConnectionString);
+                Console.WriteLine("Error was: " + ex.Message);    
                 return;
             }
 
@@ -104,6 +115,7 @@ namespace csql
             {
                 Console.WriteLine("csql v 0.2. Connection string: {0}", ConnectionString);
             }
+
 
             SqlCommand cmd = new System.Data.SqlClient.SqlCommand(command, connection);
             cmd.CommandType = CommandType.Text;
